@@ -20,4 +20,10 @@ get_logic_score(self, x, y, player)  -> get_logic_score(self, x, y, player,qipu=
 relatation
 best_step_n (遍历)-> _get_score -> best_step_predict  (生成决策空间)
                                 -> best_step_predict(self,qipu) 时时根据当前情况估算分数，满分退回
+                                
+不足：
+get_logic_score : 返回信息不足，n足够大的时候应该可以部分解决，但是n不够大的时候需要拿比较认为规定的分数来判决。
+live3+: 需要给logic的判断中添加一个活3加4个高分项。
+best_step_n中判断需要结合路径最短来判断
+拒绝放弃思路。
 
