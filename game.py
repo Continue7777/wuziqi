@@ -205,27 +205,139 @@ class GAME():#游戏类
         elif max(continues_num) == 1:
             return 1
 
-    # 走n步探索
+    # 多走n步探索
     def _get_score(self,x,y,n):
         qipu_predict = copy.deepcopy(self.qipu)
+        now_status = self.now
 
-        return 1
+        # qipu_predict[str(x) + "-" + str(y)] = self.now
+        # my_score = self.get_logic_score(x, y, player=self.now, qipu=qipu_predict)
+        # if my_score >= 100:
+        #     self.now = now_status
+        #     return 100, 0
+        # self.now = 0 if self.now == 1 else 1
+        # enemy_x, enemy_y = self.best_step_predict(qipu=qipu_predict)
+        # qipu_predict[str(enemy_x) + "-" + str(enemy_y)] = self.now
+        # enemy_score = self.get_logic_score(enemy_x, enemy_y, player=self.now, qipu=qipu_predict)
+        # if enemy_score >= 100:
+        #     self.now = now_status
+        #     return 100, 1
+
+        for i in range(n):
+            qipu_predict[str(x) + "-" + str(y)] = self.now
+            my_score = self.get_logic_score(x, y, player=self.now, qipu=qipu_predict)
+            if my_score >= 100:
+                self.now = now_status
+                return 100,0
+            self.now = 0 if self.now == 1 else 1
+            enemy_x,enemy_y = self.best_step_predict(qipu=qipu_predict)
+            qipu_predict[str(enemy_x) + "-" + str(enemy_y)] = self.now
+            enemy_score = self.get_logic_score(enemy_x, enemy_y, player=self.now, qipu=qipu_predict)
+            self.now = 0 if self.now == 1 else 1
+            if enemy_score >= 100:
+                self.now = now_status
+                return 100,1
+            x,y = self.best_step_predict(qipu=qipu_predict)
+
+        print "棋谱"
+        print x,y
+        print enemy_x,enemy_y,enemy_score
+        print qipu_predict
+        if my_score >= enemy_score:
+            self.now = now_status
+            return my_score,0  #0表示我优势大
+        else:
+            self.now = now_status
+            return enemy_score,1 #1表示敌方优势大
+
+
+
+    # 预判中使用的函数
+    def best_step_predict(self,qipu):
+        if self.step == 0:
+            return self.g_width / 2, self.g_height / 2
+
+        step_score = np.zeros((self.g_width, self.g_height, 2))
+        step_score[:,:,:] = -99
+        for i in range(self.g_width):
+            for j in range(self.g_height):
+                for k in range(2):
+                    if str(i) + "-" + str(j) not in qipu:
+                        step_score[i, j, k] = self.get_logic_score(i, j, player=k,qipu=qipu)
+
+        # 情况相同优先攻击
+        if self.now == 1:
+            enemy = 0
+        else:
+            enemy = 1
+        max_score_now = step_score[:,:,self.now].max()
+        max_score_enemy = step_score[:,:,enemy].max()
+
+        if max_score_enemy > 95:
+            if max_score_now >= max_score_enemy:
+                l = np.where(step_score[:,:,self.now] == max_score_now)
+                # print "进攻,我方分数%d,敌方分数%d"%(max_score_now,max_score_enemy)
+            else:
+                l = np.where(step_score[:,:,enemy] == max_score_enemy)
+                # print "防守,我方分数%d,敌方分数%d" % (max_score_now, max_score_enemy)
+        elif max_score_now < 0:
+            l = np.where(step_score[:, :, enemy] == max_score_enemy)
+            # print "防守,我方分数%d,敌方分数%d" % (max_score_now, max_score_enemy)
+        else:
+            # print "进攻,我方分数%d,敌方分数%d" % (max_score_now, max_score_enemy)
+            l = np.where(step_score[:,:,self.now] == max_score_now)
+
+        i = random.randint(0, len(l[0]) - 1)
+        x = l[0][i]
+        y = l[1][i]
+        return x, y
 
     # 下一步最优落子点
     def best_step_n(self,n):
         if self.step == 0:
             return self.g_width / 2, self.g_height / 2
 
-        best_x,best_y = 0,0
+        best_x,best_y = -1,-1
         best_score = -1
+        result_my = []
+        result_enemy = []
         for i in range(self.g_width):
             for j in range(self.g_height):
                 if str(i) + "-" + str(j) not in self.qipu:
-                    if self.get_logic_score(i, j, player=self.now) > 0:
-                        if self._get_score(i,j,n) > best_score:
-                            best_x,best_y=i,j
+                    if self.get_logic_score(i, j, player=1) > 0 or self.get_logic_score(i, j, player=0) > 0:
+                        tmp_score,tmp_flag = self._get_score(i,j,n)
+                        if tmp_flag == 0:
+                            result_my.append([tmp_score,i,j])
+                        else:
+                            result_enemy.append([tmp_score,i,j])
 
-        return best_x,best_y
+        if len(result_my) >0:
+            max_score = np.array(result_my)[:,0]
+            print "我方最大" + str(max_score)
+        if len(result_enemy) >0:
+            min_score = min(np.array(result_enemy)[:,0])
+            print "敌方最小" + str(min_score)
+
+
+        if len(result_my) > 0:
+            max_score = max(np.array(result_my)[:,0])
+            i = list(np.array(result_my)[:, 0]).index(max_score)
+            best_x = result_my[i][1]
+            best_y = result_my[i][2]
+        else:
+            min_score = min(np.array(result_enemy)[:,0])
+            i = list(np.array(result_enemy)[:, 0]).index(min_score)
+            print  result_enemy
+            print i
+            best_x = result_enemy[i][1]
+            best_y = result_enemy[i][2]
+
+        if best_x == -1 and best_y == -1:
+            print "一步探索"
+            return self.best_step()
+        else:
+            return best_x,best_y
+
     def best_step(self):
         if self.step == 0:
             return self.g_width / 2, self.g_height / 2
@@ -260,15 +372,13 @@ class GAME():#游戏类
             print "进攻,我方分数%d,敌方分数%d" % (max_score_now, max_score_enemy)
             l = np.where(step_score[:,:,self.now] == max_score_now)
 
-        print l
         i = random.randint(0, len(l[0]) - 1)
         x = l[0][i]
         y = l[1][i]
-        print x,y
         return x, y
 
     # 逻辑规则的落子法,每次该点黑子和白字的各自分数
-    def get_logic_score(self, x, y, player):
+    def get_logic_score(self, x, y, player,qipu=None):
         '''
         成5, 1000分
         活4、双死4、死4活3， 90分
@@ -282,6 +392,8 @@ class GAME():#游戏类
         死2， 10分
         单子 0分
         '''
+        if qipu is None:
+            qipu = self.qipu
         n = player
         state_array = np.zeros((4, 5))  # 4个方向，5个状态值，连续长度，两边的被封距离，被封总距离，之后被连接的可能
         state_array[:, 0] = 1
@@ -302,10 +414,10 @@ class GAME():#游戏类
                     else:
                         stop2 = i
                     break
-                elif str(x) + "-" + str(temp) not in self.qipu:
+                elif str(x) + "-" + str(temp) not in qipu:
                     continue_flag = False  # 空但要继续走看阻挡
                 # 被对方挡住
-                elif self.qipu[str(x) + "-" + str(temp)] != n:
+                elif qipu[str(x) + "-" + str(temp)] != n:
                     connect_flag = -1
                     if j == 0:
                         stop1 = -i
@@ -351,10 +463,10 @@ class GAME():#游戏类
                     else:
                         stop2 = i
                     break
-                elif str(temp) + "-" + str(y) not in self.qipu:
+                elif str(temp) + "-" + str(y) not in qipu:
                     continue_flag = False  # 空但要继续走看阻挡
                 # 被对方挡住
-                elif self.qipu[str(temp) + "-" + str(y)] != n:
+                elif qipu[str(temp) + "-" + str(y)] != n:
                     connect_flag = -1
                     if j == 0:
                         stop1 = -i
@@ -401,10 +513,10 @@ class GAME():#游戏类
                     else:
                         stop2 = i
                     break
-                elif str(temp1) + "-" + str(temp2) not in self.qipu:
+                elif str(temp1) + "-" + str(temp2) not in qipu:
                     continue_flag = False  # 空但要继续走看阻挡
                 # 被对方挡住
-                elif self.qipu[str(temp1) + "-" + str(temp2)] != n:
+                elif qipu[str(temp1) + "-" + str(temp2)] != n:
                     connect_flag = -1
                     if j == 0:
                         stop1 = -i
@@ -451,10 +563,10 @@ class GAME():#游戏类
                     else:
                         stop2 = i
                     break
-                elif str(temp1) + "-" + str(temp2) not in self.qipu:
+                elif str(temp1) + "-" + str(temp2) not in qipu:
                     continue_flag = False  # 空但要继续走看阻挡
                 # 被对方挡住
-                elif self.qipu[str(temp1) + "-" + str(temp2)] != n:
+                elif qipu[str(temp1) + "-" + str(temp2)] != n:
                     connect_flag = -1
                     if j == 0:
                         stop1 = -i
@@ -566,7 +678,7 @@ class GAME():#游戏类
         # if self.now == 0:
         #     x, y = self.best_step0()
         # else:
-        x, y = self.best_step()
+        x, y = self.best_step_n(3)
         if x<0 or y<0 or x>=self.g_width or y>=self.g_height or str(x)+"-"+str(y) in self.qipu or self.over!=-1:return
         self.qipu[str(x)+"-"+str(y)]=self.now
         self.over=self.is_win(x,y)
@@ -672,6 +784,7 @@ class GAME():#游戏类
         self.now=0 if self.now==1 else 1
         self.step+=1
         self.zhuangtai()
+        self.C.update()
         self.auto_step()
 
     #根据当前输入判断是否赢
