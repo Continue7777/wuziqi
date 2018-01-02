@@ -1,0 +1,29 @@
+ add game.py
+ 提交之前baseline的代码
+ 
+ add step_n
+ 思路：添加向后探索n步的思路
+ 具体做法：根据敌我双方在之前可行的范围内探测——初始空间
+          后续决策空间由之前的best_step发展
+          最后的决策根据我方是否有大于敌方的分数  -  有则我方最大化
+                                               -  无则敌方最小化
+                                               
+修改函数:
+add
+best_step_n(self,n) -> x,y 预测n步探测结果
+_get_score(self,x,y,n) -> score,1/0  0表示我方大，1表示对方大
+best_step_predict(self,qipu) -> x,y 根据预测棋谱返回最佳结果
+
+update
+get_logic_score(self, x, y, player)  -> get_logic_score(self, x, y, player,qipu=None) 修改qipu的设置，和预测时重用，仅修改参数。
+
+relatation
+best_step_n (遍历)-> _get_score -> best_step_predict  (生成决策空间)
+                                -> best_step_predict(self,qipu) 时时根据当前情况估算分数，满分退回
+                                
+不足：
+get_logic_score : 返回信息不足，n足够大的时候应该可以部分解决，但是n不够大的时候需要拿比较认为规定的分数来判决。
+live3+: 需要给logic的判断中添加一个活3加4个高分项。
+best_step_n中判断需要结合路径最短来判断
+拒绝放弃思路。
+
