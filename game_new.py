@@ -96,9 +96,9 @@ class GAME():#游戏类
     def click(self,e):
         x,y=e.x/self.dw,(e.y-self.z_height)/self.dw
         if x<0 or y<0 or x>=self.g_width or y>=self.g_height or str(x)+"-"+str(y) in self.qipu or     self.over!=-1:return
-        # print self.get_logic_score(x,y,self.now)
         self.qipu[str(x)+"-"+str(y)]=self.now
         self.over=self.is_win(x,y)
+        print self.get_features_score(x, y, self.qipu)
         x,y=x*self.dw+self.dw/2,y*self.dw+self.dw/2
         color="white" if self.now==1 else "black"
         self.C.create_oval(x,y+self.z_height,x,y+self.z_height,width=self.dw-    self.dw/8,outline=color)
@@ -119,8 +119,8 @@ class GAME():#游戏类
             return self.best_step0()
         if player_name == "one_step_logic":
             return self.best_step_logic1()
-
-    def feature_model(self,x,y):
+    #—————————————value function—————————————————#
+    def get_4direction_states(self,x,y,qipu):
         """
         describe:the model for the feature extract
         :return: True/False
@@ -132,36 +132,519 @@ class GAME():#游戏类
         for i in range(-4,5):  #水平
             if x+i < 0 or x+i >= self.g_width: #出界
                 horizontal_state[i+4] = outboard_constant
-            elif str(x+i) + "-" + str(y) not in self.qipu: #空
+            elif str(x+i) + "-" + str(y) not in qipu: #空
                 horizontal_state[i+4] = null_constant
             else:
-                horizontal_state[i+4] = self.qipu[str(x+i) + "-" + str(y)]
+                horizontal_state[i+4] = qipu[str(x+i) + "-" + str(y)]
         for i in range(-4,5): # 垂直
             if y+i < 0 or y+i >= self.g_height: #出界
                 vertical_state[i+4] = outboard_constant
-            elif str(x) + "-" + str(y+i) not in self.qipu: #空
+            elif str(x) + "-" + str(y+i) not in qipu: #空
                 vertical_state[i+4] = null_constant
             else:
-                vertical_state[i+4] = self.qipu[str(x) + "-" + str(y+i)]
+                vertical_state[i+4] = qipu[str(x) + "-" + str(y+i)]
         for i in range(-4,5): #左上-右下
             if x+i < 0 or x+i >= self.g_width or y+i < 0 or y+i >= self.g_height: #出界
                 leanleft_state[i+4] = outboard_constant
-            elif str(x+i) + "-" + str(y+i) not in self.qipu: #空
+            elif str(x+i) + "-" + str(y+i) not in qipu: #空
                 leanleft_state[i+4] = null_constant
             else:
-                leanleft_state[i+4] = self.qipu[str(x+i) + "-" + str(y+i)]
+                leanleft_state[i+4] = qipu[str(x+i) + "-" + str(y+i)]
         for i in range(-4,5): #左下-右上
             if x+i < 0 or x+i >= self.g_width or y-i < 0 or y-i >= self.g_height: #出界
                 leanright_state[i+4] = outboard_constant
-            elif str(x+i) + "-" + str(y-i) not in self.qipu: #空
+            elif str(x+i) + "-" + str(y-i) not in qipu: #空
                 leanright_state[i+4] = null_constant
             else:
-                leanright_state[i+4] = self.qipu[str(x+i) + "-" + str(y-i)]
+                leanright_state[i+4] = qipu[str(x+i) + "-" + str(y-i)]
 
+        result = [horizontal_state,vertical_state,leanleft_state,leanright_state]
+        return result
 
+    def feature_model(self,x,y):
+        """
+        direciton_states_list = self.get_4direction_states(x,y)
+        for one_direciton_state in direciton_states_list:
+            if feature_one_direction_model(one_direciton_state):
+                return True
+        return False
+        """
+        pass
 
+    def _win5(self,state,player):
+        """
+        describe:get True or False form one direciton
+        :param player:
+        :param state: the size of 9 state array in one direction
+        :return:
+        """
+        count = 1
+        for i in range(1,5):
+            if state[4+i] == player:
+                count += 1
+            else:
+                break
+        for i in range(1,5):
+            if state[4-i] == player:
+                count += 1
+            else:
+                break
+        if count >= 5:
+            return True
+        else:
+            return False
+
+    def _live4(self,state,player):
+        """
+        describe:get True or False form one direciton
+        :param player:
+        :param state: the size of 9 state array in one direction
+        :return:
+        """
+        enemy = 0 if player == 1 else 1
+        count = 1
+        stop_flag = False
+        for i in range(1,5):
+            if state[4+i] == player:
+                count += 1
+            else:
+                if state[4+i] == enemy or state[4+i] == outboard_constant:
+                    stop_flag = True
+                break
+        for j in range(1,5):
+            if state[4-j] == player:
+                count += 1
+            else:
+                if state[4-j] == enemy or state[4-j] == outboard_constant:
+                    stop_flag = True
+                break
+        if count == 4 and stop_flag == False:
+            return True
+        else:
+            return False
+
+    def _free4(self,state,player):
+        """
+        describe:one side or two side available 4
+        :param player:
+        :param state: the size of 9 state array in one direction
+        :return:
+        """
+        enemy = 0 if player == 1 else 1
+        count = 1
+        stop_flag1 = False
+        stop_flag2 = False
+        for i in range(1,5):
+            if state[4+i] == player:
+                count += 1
+            else:
+                if state[4+i] == enemy or state[4+i] == outboard_constant:
+                    stop_flag1 = True
+                break
+        for j in range(1,5):
+            if state[4-j] == player:
+                count += 1
+            else:
+                if state[4-j] == enemy or state[4-j] == outboard_constant:
+                    stop_flag2 = True
+                break
+
+        stop_flag = stop_flag1 and stop_flag2
+        if count == 4 and stop_flag == False:
+            return True
+        else:
+            return False
+
+    def _live3(self,state,player):
+        """
+        describe:get True or False form one direciton
+        :param player:
+        :param state: the size of 9 state array in one direction
+        :return:
+        """
+        enemy = 0 if player == 1 else 1
+        count = 1
+        stop_flag = False
+        for i in range(1,5):
+            if state[4+i] == player:
+                count += 1
+            else:
+                if state[4+i] == enemy or state[4+i] == outboard_constant:
+                    stop_flag = True
+                break
+        for j in range(1,5):
+            if state[4-j] == player:
+                count += 1
+            else:
+                if state[4-j] == enemy or state[4-j] == outboard_constant:
+                    stop_flag = True
+                break
+        if count == 3 and stop_flag == False:
+            return True
+        else:
+            return False
+
+    def _free3(self,state,player):
+        """
+        describe:one side or two side available 4
+        :param player:
+        :param state: the size of 9 state array in one direction
+        :return:
+        """
+        enemy = 0 if player == 1 else 1
+        count = 1
+        stop_flag1 = False
+        stop_flag2 = False
+        for i in range(1,5):
+            if state[4+i] == player:
+                count += 1
+            else:
+                if state[4+i] == enemy or state[4+i] == outboard_constant:
+                    stop_flag1 = True
+                break
+        for j in range(1,5):
+            if state[4-j] == player:
+                count += 1
+            else:
+                if state[4-j] == enemy or state[4-j] == outboard_constant:
+                    stop_flag2 = True
+                break
+
+        stop_flag = stop_flag1 and stop_flag2
+        if count == 3 and stop_flag == False:
+            return True
+        else:
+            return False
+
+    def _live2(self,state,player):
+        """
+        describe:get True or False form one direciton
+        :param player:
+        :param state: the size of 9 state array in one direction
+        :return:
+        """
+        enemy = 0 if player == 1 else 1
+        count = 1
+        stop_flag = False
+        for i in range(1,5):
+            if state[4+i] == player:
+                count += 1
+            else:
+                if state[4+i] == enemy or state[4+i] == outboard_constant:
+                    stop_flag = True
+                break
+        for j in range(1,5):
+            if state[4-j] == player:
+                count += 1
+            else:
+                if state[4-j] == enemy or state[4-j] == outboard_constant:
+                    stop_flag = True
+                break
+        if count == 2 and stop_flag == False:
+            return True
+        else:
+            return False
+
+    def _free2(self,state,player):
+        """
+        describe:one side or two side available 2
+        :param player:
+        :param state: the size of 9 state array in one direction
+        :return:
+        """
+        enemy = 0 if player == 1 else 1
+        count = 1
+        stop_flag1 = False
+        stop_flag2 = False
+        for i in range(1,5):
+            if state[4+i] == player:
+                count += 1
+            else:
+                if state[4+i] == enemy or state[4+i] == outboard_constant:
+                    stop_flag1 = True
+                break
+        for j in range(1,5):
+            if state[4-j] == player:
+                count += 1
+            else:
+                if state[4-j] == enemy or state[4-j] == outboard_constant:
+                    stop_flag2 = True
+                break
+
+        stop_flag = stop_flag1 and stop_flag2
+        if count == 2 and stop_flag == False:
+            return True
+        else:
+            return False
+
+    def _die_state(self,state):
+        """
+        describe:get True or False form one direciton
+        :param player:
+        :param state: the size of 9 state array in one direction
+        :return:
+        """
+        enemy = 0 if self.now == 1 else 1
+        count = 1
+
+        for i in range(1,5):
+            if state[4+i] != enemy and state[4+i] != outboard_constant:
+                count += 1
+            else:
+                break
+        for j in range(1,5):
+            if state[4-j] == enemy or state[4-j] == outboard_constant:
+                count += 1
+            else:
+                break
+
+        if count < 5:
+            return True
+        else:
+            return False
+
+    def _available2(self,state):
+        """
+        describe:find the available state
+        :param state:
+        :return:
+        """
+        for i in range(-2,3):
+            if state[4+i] == 0 or state[4+i] == 1 and i != 0:
+                return True
         return False
 
+    def _available1(self,state):
+        """
+        describe:find the available state
+        :param state:
+        :return:
+        """
+        for i in range(-1,2):
+            if (state[4+i] == 0 or state[4+i] == 1) and i != 0:
+                return True
+        return False
+
+    def win5(self,x,y,qipu):
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        for one_direciton_state in direciton_states_list:
+            if self._win5(one_direciton_state,player=self.now):
+                return True
+        return False
+
+    def against_win5(self,x,y,qipu):
+        enemy = 0 if self.now == 1 else 1
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        for one_direciton_state in direciton_states_list:
+            if self._win5(one_direciton_state,player=enemy):
+                return True
+        return False
+
+    def live4(self,x,y,qipu):
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        for one_direciton_state in direciton_states_list:
+            if self._live4(one_direciton_state,player=self.now):
+                return True
+        return False
+
+    def free4(self,x,y,qipu):
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        for one_direciton_state in direciton_states_list:
+            if self._free4(one_direciton_state,player=self.now):
+                return True
+        return False
+
+    def against_live4(self,x,y,qipu):
+        enemy = 0 if self.now == 1 else 1
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        for one_direciton_state in direciton_states_list:
+            if self._live4(one_direciton_state,player=enemy):
+                return True
+        return False
+
+    def live3(self,x,y,qipu):
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        for one_direciton_state in direciton_states_list:
+            if self._live3(one_direciton_state,player=self.now):
+                return True
+        return False
+
+    def free3(self,x,y,qipu):
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        for one_direciton_state in direciton_states_list:
+            if self._free3(one_direciton_state,player=self.now):
+                return True
+        return False
+
+    def double3(self,x,y,qipu):
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        count = 0
+        for one_direciton_state in direciton_states_list:
+            if self._live3(one_direciton_state,player=self.now):
+                count += 1
+        if count > 1:
+            return True
+        else:
+            return False
+
+    def double34(self,x,y,qipu):
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        count = 0
+        for one_direciton_state in direciton_states_list:
+            if self._live3(one_direciton_state,player=self.now) or self._free4(one_direciton_state,player=self.now):
+                count += 1
+        if count > 1:
+            return True
+        else:
+            return False
+
+    def against_double34(self,x,y,qipu):
+        enemy = 0 if self.now == 1 else 1
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        count = 0
+        for one_direciton_state in direciton_states_list:
+            if self._live3(one_direciton_state,player=enemy) or self._free4(one_direciton_state,player=enemy):
+                count += 1
+        if count > 1:
+            return True
+        else:
+            return False
+
+    def against_double3(self,x,y,qipu):
+        enemy = 0 if self.now == 1 else 1
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        count = 0
+        for one_direciton_state in direciton_states_list:
+            if self._live3(one_direciton_state,player=enemy):
+                count += 1
+        if count > 1:
+            return True
+        else:
+            return False
+
+    def against_live3(self,x,y,qipu):
+        enemy = 0 if self.now == 1 else 1
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        for one_direciton_state in direciton_states_list:
+            if self._live3(one_direciton_state,player=enemy):
+                return True
+        return False
+
+    def die_state(self,x,y,qipu):
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        for one_direciton_state in direciton_states_list:
+            if self._die_state(one_direciton_state) == False:
+                return False
+        return True
+
+    def angle_live(self,x,y,qipu):
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        count = 0
+        for one_direciton_state in direciton_states_list:
+            if self._live2(one_direciton_state,player=self.now):
+                count += 1
+        if count > 1:
+            return True
+        else:
+            return False
+
+    def angle_free(self,x,y,qipu):
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        count = 0
+        for one_direciton_state in direciton_states_list:
+            if self._free2(one_direciton_state,player=self.now):
+                count += 1
+        if count > 1:
+            return True
+        else:
+            return False
+
+    def lean_live2(self,x,y,qipu):
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        leanleft_state = direciton_states_list[2]
+        leanright_state = direciton_states_list[3]
+        if leanright_state[3] == self.now and leanright_state[2] == null_constant and leanright_state[5] ==null_constant:
+            return True
+        elif leanright_state[5] == self.now and leanright_state[2] == null_constant and leanright_state[3] ==null_constant:
+            return True
+        elif leanleft_state[3] == self.now and leanleft_state[2] == null_constant and leanleft_state[5] ==null_constant:
+            return True
+        elif leanleft_state[5] == self.now and leanleft_state[2] == null_constant and leanleft_state[3] ==null_constant:
+            return True
+        else:
+            return False
+
+    def flat_live2(self,x,y,qipu):
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        horizontal_state= direciton_states_list[0]
+        vertical_state = direciton_states_list[1]
+        if horizontal_state[3] == self.now and horizontal_state[2] == null_constant and horizontal_state[5] ==null_constant:
+            return True
+        elif horizontal_state[5] == self.now and horizontal_state[2] == null_constant and horizontal_state[3] ==null_constant:
+            return True
+        elif vertical_state[3] == self.now and vertical_state[2] == null_constant and vertical_state[5] ==null_constant:
+            return True
+        elif vertical_state[5] == self.now and vertical_state[2] == null_constant and vertical_state[3] ==null_constant:
+            return True
+        else:
+            return False
+
+    def available2(self,x,y,qipu):
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        for one_direciton_state in direciton_states_list:
+            if self._available2(one_direciton_state):
+                return True
+        return False
+
+    def available1(self,x,y,qipu):
+        direciton_states_list = self.get_4direction_states(x,y,qipu)
+        for one_direciton_state in direciton_states_list:
+            if self._available1(one_direciton_state):
+                return True
+        return False
+
+    def get_features_score(self,x, y, qipu):
+        if self.win5(x,y,qipu):
+            score = 100
+        elif self.against_win5(x,y,qipu):
+            score = 99
+        elif self.live4(x,y,qipu):
+            score = 98
+        elif self.double34(x,y,qipu):
+            score = 97
+        elif self.against_live4(x,y,qipu):
+            score = 96
+        elif self.against_double34(x,y,qipu):
+            score = 95
+        elif self.double3(x,y,qipu):
+            score = 94
+        elif self.against_double3(x,y,qipu):
+            score = 93
+        elif self.live3(x,y,qipu):
+            score = 92
+        elif self.die_state(x,y,qipu):
+            score = -2
+        elif self.angle_live(x,y,qipu):
+            score = 89
+        elif self.free3(x,y,qipu):
+            score = 88
+        elif self.angle_free(x,y,qipu):
+            score = 86
+        elif self.against_live3(x,y,qipu):
+            score = 85
+        elif self.lean_live2(x,y,qipu):
+            score = 84
+        elif self.flat_live2(x,y,qipu):
+            score = 83
+        elif self.free4(x,y,qipu):
+            score = 82
+        elif self.available1(x,y,qipu):
+            score = 80
+        else:
+            score = 0
+
+        return score
+    #——————————value function end——————————————————#
     def step_score_logic1(self):
         """
         describe:  get score for each point

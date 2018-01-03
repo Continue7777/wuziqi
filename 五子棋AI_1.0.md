@@ -100,6 +100,10 @@ qipan_width,qipan_height: 棋盘的宽和高
 
 ### 特征提取与评估
 
+#### def get_4direction_states(x,y):
+
+​	output -> [横、竖、左斜、右斜]  每个9长度的状态 0黑  1白 2空 -1出界
+
 #### def feature_model(x,y): 
 
 ​	//评判函数模板，除双3，活3/4以外都有用。
@@ -128,7 +132,9 @@ qipan_width,qipan_height: 棋盘的宽和高
 
 #### def die_state(x,y)  #4方向不可能赢，被封死的点
 
-#### def only1(x,y) #孤点
+#### def available2(x,y) #孤点
+
+def available1(x,y)
 
 ​	需求 -> 方圆2个没点，1个距离孤点也考虑进来
 
@@ -146,15 +152,15 @@ qipan_width,qipan_height: 棋盘的宽和高
 
 #### def against_double34(x,y) # 防守对方活3加4
 
-#### def angle_free(x,y) #我-三角无挡
+#### def angle_live(x,y) #我-三角无挡
 
-#### def angle_not_free(x,y)我-三角1边挡
+#### def angle_free(x,y)我-三角1边挡
+
+#### def lean_live2(x,y):斜活2
 
 #### def lean2(x,y)#我-斜角成2
 
 #### def flat2(x,y)#我-横竖成2
-
-#### def available(x,y) #我-可行点
 
 #### def get_features_score(x,y,qipu):(需要预测和评估公用，所以不能使用self.qipu)
 
@@ -182,9 +188,9 @@ qipan_width,qipan_height: 棋盘的宽和高
 
 我-活34: 97 double34()
 
-敌-活34:96 agianst_double34()
+敌-活34:95 agianst_double34()
 
-敌-活4  : 95 against_live4()
+敌-活4  : 96 against_live4()
 
 我-活双3:94 double3()
 
@@ -196,7 +202,7 @@ qipan_width,qipan_height: 棋盘的宽和高
 
 我-三角1边挡：90 angle_not_free()
 
-敌-活3:89 against_live3()
+敌-活3:85 against_live3()
 
 我-斜角成2:3 lean2()
 
@@ -256,6 +262,10 @@ qipan_width,qipan_height: 棋盘的宽和高
 ### mcts搜索(思路待完善，重构mcts函数，并考虑五子棋中的需求点)
 
 蒙特卡洛这边暂时不考虑存储中间状态来换时间。
+
+考虑不同的仿真方法
+
+仿真思路：随机、快速策略、最优下法（这个慢死）
 
 #### def uct(state,itermax):
 
