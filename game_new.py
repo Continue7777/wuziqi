@@ -10,6 +10,7 @@ outboard_constant = -1
 black_constant = 0
 white_constant = 1
 null_constant = 2
+not_available_constant = -100
 
 class GAME():#游戏类
     z_height=30
@@ -60,6 +61,7 @@ class GAME():#游戏类
             self.C.create_line(0,(i-1)*self.dw+self.z_height,self.width,(i-1)*self.dw+self.z_height,fill="#333333")
         if z==False:
             self.C.bind("<Button-1>", self.click)
+            self.C.bind("<Button-3>",self.one_game_visul)
             self.C.pack()
 
     def zhuangtai(self):
@@ -79,11 +81,21 @@ class GAME():#游戏类
         self.Z = Label( self.C, text=" "*len(text)*4+text,justify="right",width=self.width*2)
         self.Z.place(anchor="n",height=self.z_height)
 
-    def auto_step(self,is_record=True,is_visual=True):
-        x, y = self.best_step0()
+    def one_game_visul(self,e):
+        player_name1 = "one_step_logic"
+        player_name2 = "one_step_logic"
+        player_name = player_name1
+        while self.over == -1 :
+            self.auto_one_visual(player_name=player_name)
+            player_name = player_name1 if player_name == player_name2 else player_name2
+            time.sleep(0.5)
+
+    def auto_one_visual(self,player_name):
+        x, y = self.best_step(player_name=player_name)
         if x<0 or y<0 or x>=self.g_width or y>=self.g_height or str(x)+"-"+str(y) in self.qipu or self.over!=-1:return
         self.qipu[str(x)+"-"+str(y)]=self.now
         self.over=self.is_win(x,y)
+        print self.get_features_score(x, y, self.qipu)
         x,y=x*self.dw+self.dw/2,y*self.dw+self.dw/2
         color="white" if self.now==1 else "black"
         self.C.create_oval(x,y+self.z_height,x,y+self.z_height,width=self.dw-    self.dw/8,outline=color)
@@ -107,18 +119,23 @@ class GAME():#游戏类
         self.step+=1
         self.zhuangtai()
         self.C.update()
-        # self.auto_step()
-
+        self.auto_one_visual(player_name="one_step_logic")
 
     def step_score(self,player_name):
         if player_name == 'one_step_logic':
-            return self.step_score_logic1()
+            return self.step_score_logic1(qipu=self.qipu)
+
 
     def best_step(self,player_name):
+        if self.step == 0:
+            return self.g_width / 2 -1 , self.g_height / 2 -1
+
         if player_name == "noob_logic":
             return self.best_step0()
-        if player_name == "one_step_logic":
+        elif player_name == "one_step_logic":
             return self.best_step_logic1()
+        else:#不存在
+            return None
     #—————————————value function—————————————————#
     def get_4direction_states(self,x,y,qipu):
         """
@@ -645,17 +662,26 @@ class GAME():#游戏类
 
         return score
     #——————————value function end——————————————————#
-    def step_score_logic1(self):
+    def step_score_logic1(self,qipu):
         """
         describe:  get score for each point
         :return:shape(w,h) narray
         """
+        score_array = np.zeros((self.g_width,self.g_height))
+        score_array[:,:] = not_available_constant
+        for x in range(self.g_width):
+            for y in range(self.g_height):
+                if self.available2(x,y,qipu) and str(x) + "-" + str(y) not in qipu:
+                    score_array[x,y] = self.get_features_score(x,y,qipu)
+        return score_array
 
     def best_step_logic1(self):
-        """
-
-        :return:
-        """
+        score_array = self.step_score_logic1(qipu=self.qipu)
+        index_tuple = np.where(score_array == np.max(score_array))
+        i = random.randint(0,len(index_tuple[0])-1)
+        x = index_tuple[0][i]
+        y = index_tuple[1][i]
+        return x,y
 
     def best_step0(self):
         if self.step == 0:
