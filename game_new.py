@@ -10,7 +10,7 @@ outboard_constant = -1
 black_constant = 0
 white_constant = 1
 null_constant = 2
-not_available_constant = -100
+not_available_constant = -1000
 
 class GAME():#游戏类
     z_height=30
@@ -119,7 +119,9 @@ class GAME():#游戏类
         self.step+=1
         self.zhuangtai()
         self.C.update()
-        self.auto_one_visual(player_name="one_step_logic")
+        start = time.time()
+        self.auto_one_visual(player_name="max_min_search")
+        print time.time()-start
 
     def step_score(self,player_name):
         if player_name == 'one_step_logic':
@@ -133,7 +135,9 @@ class GAME():#游戏类
         if player_name == "noob_logic":
             return self.best_step0()
         elif player_name == "one_step_logic":
-            return self.best_step_logic1()
+            return self.best_step_logic1(qipu=self.qipu)
+        elif player_name == "max_min_search":
+            return self.best_step_maxmin_search(qipu=self.qipu,n=3)
         else:#不存在
             return None
     #—————————————value function—————————————————#
@@ -624,19 +628,19 @@ class GAME():#游戏类
         if self.win5(x,y,qipu):
             score = 100
         elif self.against_win5(x,y,qipu):
-            score = 99
+            score = -99
         elif self.live4(x,y,qipu):
             score = 98
         elif self.double34(x,y,qipu):
             score = 97
         elif self.against_live4(x,y,qipu):
-            score = 96
+            score = -96
         elif self.against_double34(x,y,qipu):
-            score = 95
+            score = -95
         elif self.double3(x,y,qipu):
             score = 94
         elif self.against_double3(x,y,qipu):
-            score = 93
+            score = -93
         elif self.live3(x,y,qipu):
             score = 92
         elif self.die_state(x,y,qipu):
@@ -648,7 +652,7 @@ class GAME():#游戏类
         elif self.angle_free(x,y,qipu):
             score = 86
         elif self.against_live3(x,y,qipu):
-            score = 85
+            score = -85
         elif self.lean_live2(x,y,qipu):
             score = 84
         elif self.flat_live2(x,y,qipu):
@@ -672,13 +676,111 @@ class GAME():#游戏类
         for x in range(self.g_width):
             for y in range(self.g_height):
                 if self.available2(x,y,qipu) and str(x) + "-" + str(y) not in qipu:
-                    score_array[x,y] = self.get_features_score(x,y,qipu)
+                    score_array[x,y] = abs(self.get_features_score(x,y,qipu))
         return score_array
 
-    def best_step_logic1(self):
-        score_array = self.step_score_logic1(qipu=self.qipu)
+    def best_step_logic1(self,qipu):
+        score_array = self.step_score_logic1(qipu=qipu)
         index_tuple = np.where(score_array == np.max(score_array))
         i = random.randint(0,len(index_tuple[0])-1)
+        x = index_tuple[0][i]
+        y = index_tuple[1][i]
+        return x,y
+
+    def get_features_score_n(self,x,y,n,qipu):
+        """
+        get the n step score with best_step_logic1
+        :param x:
+        :param y:
+        :param qipu:
+        :return:score/depth/maxnum  +means win -means lose
+        """
+        qipu_predict = copy.deepcopy(qipu)
+        now_status = self.now
+        for i in range(n):
+            qipu_predict[str(x) + "-" + str(y)] = self.now
+            my_score = self.get_features_score(x, y,qipu=qipu_predict)
+            if my_score >= 100:
+                self.now = now_status
+                return 100,i,0
+            self.now = 0 if self.now == 1 else 1
+            enemy_x,enemy_y = self.best_step_logic1(qipu=qipu_predict)
+            qipu_predict[str(enemy_x) + "-" + str(enemy_y)] = self.now
+            enemy_score = self.get_features_score(enemy_x, enemy_y,qipu=qipu_predict)
+            self.now = 0 if self.now == 1 else 1
+            if enemy_score >= 100:
+                self.now = now_status
+                return -100,i,0
+            x,y = self.best_step_logic1(qipu=qipu_predict)
+
+        my_score_array = self.step_score_logic1(qipu=qipu_predict)
+        max_num = len(np.where(my_score_array == np.max(my_score_array))[0])
+        if my_score >= enemy_score: # 表示我优势大
+            self.now = now_status
+            return max(abs(my_score),abs(enemy_score)),n,max_num
+        else: #对方优势大
+            self.now = now_status
+            return -max(abs(my_score),abs(enemy_score)),n,max_num  # 1表示敌方优势大
+
+    def _step_score_maxmin_search(self,qipu,n):
+        """
+
+        :param qipu:
+        :return:
+        """
+        score_array = np.zeros((self.g_width,self.g_height))
+        score_array[:,:] = not_available_constant
+        depth_array = np.zeros((self.g_width, self.g_height))
+        max_num_array = np.zeros((self.g_width, self.g_height))
+        count = 0
+        for x in range(self.g_width):
+            for y in range(self.g_height):
+                if self.available1(x,y,qipu) and str(x) + "-" + str(y) not in qipu:
+                    score,depth,max_num = self.get_features_score_n(x,y,n=n,qipu=qipu)
+                    print "(%d,%d)score %d , depth %d , max_num %d"%(x,y,score,depth,max_num)
+                    score_array[x,y] = score
+                    depth_array[x,y] = depth
+                    max_num_array[x,y] = max_num
+                    count += 1
+        print "count %d"%count
+
+        return score_array,depth_array,max_num_array
+
+    def step_score_maxmin_search(self, qipu,n):
+        score_array = np.zeros((self.g_width, self.g_height))
+        score_array[:, :] = not_available_constant
+        for x in range(self.g_width):
+            for y in range(self.g_height):
+                if self.available2(x, y, qipu) and str(x) + "-" + str(y) not in qipu:
+                    score, depth, max_num = self.get_features_score_n(x, y, n=n,qipu=qipu)
+                    score_array[x, y] = score
+        return score_array
+
+    def best_step_maxmin_search(self,qipu,n):
+        """
+        分数优先级>深度（正最大，负最小）>最后层max/min个数(正max,负min)>random
+        :param qipu:
+        :return:
+        """
+        score_array,depth_array,max_num_array = self._step_score_maxmin_search(qipu=qipu,n=n)
+        index_tuple = np.where(score_array == np.max(score_array))
+        if np.max(score_array) == 100: #最近取胜
+            min_depth = np.min(depth_array[score_array == np.max(score_array)])
+            mark = (depth_array == min_depth) & (score_array == np.max(score_array))
+            index_tuple = np.where(mark)
+        elif np.max(score_array) == -100:  # 最近取胜
+            max_depth = np.min(depth_array[score_array == np.max(score_array)])
+            mark = (depth_array == max_depth) & (score_array == np.max(score_array))
+            index_tuple = np.where(mark)
+        elif np.max(score_array) < 0: #劣势情况下，最小化劣势
+            min_num = np.min(max_num_array[score_array == np.max(score_array)])
+            mark = (max_num_array == min_num) & (score_array == np.max(score_array))
+            index_tuple = np.where(mark)
+        elif np.max(score_array) > 0: #大于1时
+            max_num = np.max(max_num_array[score_array == np.max(score_array)])
+            mark = (max_num_array == max_num) & (score_array == np.max(score_array))
+            index_tuple = np.where(mark)
+        i = random.randint(0, len(index_tuple[0]) - 1)
         x = index_tuple[0][i]
         y = index_tuple[1][i]
         return x,y
