@@ -5,7 +5,7 @@ import time
 import numpy as np
 import copy
 
-dogFall_constant = 2
+dogFall_constant = 999
 outboard_constant = -1
 black_constant = 0
 white_constant = 1
@@ -18,16 +18,21 @@ class GAME():#游戏类
     C,Z=0,0
     black_score = 0
     white_score = 0
-    def __init__(self,dw,g_height,g_width):
+    def __init__(self,dw,g_height,g_width,evalution_flag = False):
         self.dw,self.g_height,self.g_width=dw,g_height,g_width
-        self.height,self.width=self.g_height*self.dw+self.z_height,self.g_width*self.dw
-        self.window = Tk()
-        self.window.title(u'五子棋')
-        self.center_window()
-        self.window.bind('<Key>', self.key)
-        self.qipan()
-        self.zhuangtai()
-        self.window.mainloop()
+        if evalution_flag == False:
+            self.height, self.width = self.g_height * self.dw + self.z_height, self.g_width * self.dw
+            self.window = Tk()
+            self.window.title(u'五子棋')
+            self.center_window()
+            self.window.bind('<Key>', self.key)
+            self.qipan()
+            self.zhuangtai()
+            self.window.mainloop()
+        else:
+            result_dict = self.evalution(["noob_logic","one_step_logic","max_min_search"], num =5)
+            for key in result_dict:
+                print key,result_dict[key]
 
     def center_window(self):
         ws = self.window.winfo_screenwidth()
@@ -95,7 +100,7 @@ class GAME():#游戏类
         if x<0 or y<0 or x>=self.g_width or y>=self.g_height or str(x)+"-"+str(y) in self.qipu or self.over!=-1:return
         self.qipu[str(x)+"-"+str(y)]=self.now
         self.over=self.is_win(x,y)
-        print self.get_features_score(x, y, self.qipu)
+        # print self.get_features_score(x, y, self.qipu)
         x,y=x*self.dw+self.dw/2,y*self.dw+self.dw/2
         color="white" if self.now==1 else "black"
         self.C.create_oval(x,y+self.z_height,x,y+self.z_height,width=self.dw-    self.dw/8,outline=color)
@@ -110,7 +115,7 @@ class GAME():#游戏类
         if x<0 or y<0 or x>=self.g_width or y>=self.g_height or str(x)+"-"+str(y) in self.qipu or     self.over!=-1:return
         self.qipu[str(x)+"-"+str(y)]=self.now
         self.over=self.is_win(x,y)
-        print self.get_features_score(x, y, self.qipu)
+        # print self.get_features_score(x, y, self.qipu)
         x,y=x*self.dw+self.dw/2,y*self.dw+self.dw/2
         color="white" if self.now==1 else "black"
         self.C.create_oval(x,y+self.z_height,x,y+self.z_height,width=self.dw-    self.dw/8,outline=color)
@@ -123,10 +128,64 @@ class GAME():#游戏类
         self.auto_one_visual(player_name="max_min_search")
         print time.time()-start
 
-    def step_score(self,player_name):
-        if player_name == 'one_step_logic':
-            return self.step_score_logic1(qipu=self.qipu)
+    def one_game_evalution(self,player1,player2):
+        """
+        :param player1:
+        :param player2:
+        :return: 0 player1 win ,1 player2 win ,0 dogfall
+        """
+        player = player1
+        count = 0
+        while self.over == -1:
+            count += 1
+            x,y = self.best_step(player_name=player)
+            self.qipu[str(x) + "-" + str(y)] = self.now
+            self.over = self.is_win(x, y)
+            if self.over == dogFall_constant:
+                return dogFall_constant
+            self.now = 0 if self.now == 1 else 1
+            self.step += 1
+            player = player1 if player == player2 else player2
+        #clear
+        self.now, self.step, self.over, self.qipu = 0, 0, -1, {}
 
+        print count
+        if player == player1:
+            return 1
+        else:
+            return 0
+
+    def evalution(self,player_name_list, num):
+        """
+        without
+        :param num:
+        :return:
+        """
+        result_dict = {}
+        for player1 in player_name_list:
+            for player2 in player_name_list:
+                if player1 != player2:
+                    player1_win = 0
+                    player2_win = 0
+                    dog_win = 0
+                    for i in range(num):
+                        start = time.time()
+                        t = self.one_game_evalution(player1=player1,player2=player2)
+                        print "%s-%s result:%d  time:%f"%(player1,player2,t,time.time()-start)
+                        if t == 0:
+                            player1_win += 1
+                        elif t == 1:
+                            player2_win += 1
+                        else:
+                            dog_win += 1
+                    result_dict[str(player1) + "-" + str(player2)] = str(player1_win) + " _ " + str(player2_win) + " _ " + str(dog_win)
+        return result_dict
+
+    def step_score(self,player_name):
+        if player_name == "one_step_logic":
+            return self.step_score_logic1(qipu=self.qipu)
+        elif player_name == "mcts":
+            return self.step_score_mcts(qipu=self.qipu)
 
     def best_step(self,player_name):
         if self.step == 0:
@@ -138,6 +197,8 @@ class GAME():#游戏类
             return self.best_step_logic1(qipu=self.qipu)
         elif player_name == "max_min_search":
             return self.best_step_maxmin_search(qipu=self.qipu,n=3)
+        elif player_name == "mcts":
+            return self.best_step_mcts(qipu=self.qipu)
         else:#不存在
             return None
     #—————————————value function—————————————————#
@@ -510,10 +571,14 @@ class GAME():#游戏类
 
     def double34(self,x,y,qipu):
         direciton_states_list = self.get_4direction_states(x,y,qipu)
-        count = 0
+        count1 = 0
+        count2 = 0
         for one_direciton_state in direciton_states_list:
-            if self._live3(one_direciton_state,player=self.now) or self._free4(one_direciton_state,player=self.now):
-                count += 1
+            if self._live3(one_direciton_state,player=self.now):
+                count1 += 1
+            if self._free4(one_direciton_state,player=self.now):
+                count2 += 1
+        count = count1 + count2
         if count > 1:
             return True
         else:
@@ -522,10 +587,14 @@ class GAME():#游戏类
     def against_double34(self,x,y,qipu):
         enemy = 0 if self.now == 1 else 1
         direciton_states_list = self.get_4direction_states(x,y,qipu)
-        count = 0
+        count1 = 0
+        count2 = 0
         for one_direciton_state in direciton_states_list:
-            if self._live3(one_direciton_state,player=enemy) or self._free4(one_direciton_state,player=enemy):
-                count += 1
+            if self._live3(one_direciton_state,player=self.now):
+                count1 += 1
+            if self._free4(one_direciton_state,player=self.now):
+                count2 += 1
+        count = count1 + count2
         if count > 1:
             return True
         else:
@@ -702,19 +771,22 @@ class GAME():#游戏类
             my_score = self.get_features_score(x, y,qipu=qipu_predict)
             if my_score >= 100:
                 self.now = now_status
-                return 100,i,0
+                return 100,i+1,0
             self.now = 0 if self.now == 1 else 1
+            print "my_temp (%d,%d) score = %d"%(x,y,my_score)
             enemy_x,enemy_y = self.best_step_logic1(qipu=qipu_predict)
             qipu_predict[str(enemy_x) + "-" + str(enemy_y)] = self.now
             enemy_score = self.get_features_score(enemy_x, enemy_y,qipu=qipu_predict)
             self.now = 0 if self.now == 1 else 1
+            print "enemy_temp (%d,%d) score = %d" % (enemy_x, enemy_y, enemy_score)
             if enemy_score >= 100:
                 self.now = now_status
-                return -100,i,0
+                return -100,i+1,0
             x,y = self.best_step_logic1(qipu=qipu_predict)
 
         my_score_array = self.step_score_logic1(qipu=qipu_predict)
         max_num = len(np.where(my_score_array == np.max(my_score_array))[0])
+        print my_score,enemy_score
         if my_score >= enemy_score: # 表示我优势大
             self.now = now_status
             return max(abs(my_score),abs(enemy_score)),n,max_num
@@ -742,7 +814,7 @@ class GAME():#游戏类
                     depth_array[x,y] = depth
                     max_num_array[x,y] = max_num
                     count += 1
-        print "count %d"%count
+        # print "count %d"%count
 
         return score_array,depth_array,max_num_array
 
@@ -763,14 +835,15 @@ class GAME():#游戏类
         :return:
         """
         score_array,depth_array,max_num_array = self._step_score_maxmin_search(qipu=qipu,n=n)
+        print "step :" + str(self.step)
         index_tuple = np.where(score_array == np.max(score_array))
         if np.max(score_array) == 100: #最近取胜
             min_depth = np.min(depth_array[score_array == np.max(score_array)])
             mark = (depth_array == min_depth) & (score_array == np.max(score_array))
             index_tuple = np.where(mark)
         elif np.max(score_array) == -100:  # 最近取胜
-            max_depth = np.min(depth_array[score_array == np.max(score_array)])
-            mark = (depth_array == max_depth) & (score_array == np.max(score_array))
+            max_depth = np.max(depth_array[score_array == -100])
+            mark = (depth_array == max_depth) & (score_array == -100)
             index_tuple = np.where(mark)
         elif np.max(score_array) < 0: #劣势情况下，最小化劣势
             min_num = np.min(max_num_array[score_array == np.max(score_array)])
@@ -784,6 +857,48 @@ class GAME():#游戏类
         x = index_tuple[0][i]
         y = index_tuple[1][i]
         return x,y
+
+    # def step_score_mcts(self, qipu ,itermax):
+    #     """ Conduct a UCT search for itermax iterations starting from rootstate.
+    #         Return the best move from the rootstate.
+    #         Assumes 2 alternating players (player 1 starts), with game results in the range [0.0, 1.0]."""
+    #
+    #     untried_moves = []
+    #     child_nodes = []
+    #
+    #     for i in range(itermax):
+    #         # Select
+    #         while untried_moves == [] and child_nodes != []:  # node is fully expanded and non-terminal
+    #             node = node.UCTSelectChild()
+    #             state.DoMove(node.move)
+    #
+    #         # Expand
+    #         if node.untriedMoves != []:  # if we can expand (i.e. state/node is non-terminal)
+    #             m = random.choice(node.untriedMoves)
+    #             state.DoMove(m)
+    #             node = node.AddChild(m, state)  # add child and descend tree
+    #
+    #         # Rollout - this can often be made orders of magnitude quicker using a state.GetRandomMove() function
+    #         while state.GetMoves() != []:  # while state is non-terminal
+    #             state.DoMove(random.choice(state.GetMoves()))
+    #
+    #         # Backpropagate
+    #         while node != None:  # backpropagate from the expanded node and work back to the root node
+    #             node.Update(state.GetResult(
+    #                 node.playerJustMoved))  # state is terminal. Update node with result from POV of node.playerJustMoved
+    #             node = node.parentNode
+    #
+    #     # Output some information about the tree - can be omitted
+    #     if (verbose):
+    #         print rootnode.TreeToString(0)
+    #     else:
+    #         print rootnode.ChildrenToString()
+    #
+    #     return sorted(rootnode.childNodes, key=lambda c: c.visits)[-1].move  # return the move that was most visited
+
+
+    def best_step_mcts(self,qipu):
+        pass
 
     def best_step0(self):
         if self.step == 0:
@@ -874,7 +989,7 @@ class GAME():#游戏类
                     break
                 continues_num[3] += 1
 
-        print continues_num, again_exist
+        # print continues_num, again_exist
         # 评分系统
         continues_num_sort = copy.deepcopy(continues_num)
         if max(continues_num) >= 5:
